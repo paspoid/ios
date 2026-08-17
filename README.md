@@ -53,7 +53,7 @@ The Paspo ID app itself requires a newer iOS than the SDK does. On devices where
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/pingocean/paspo-ios-sdk", from: "1.0.0"),
+    .package(url: "https://github.com/paspoid/ios", from: "1.0.0"),
 ]
 ```
 
@@ -61,8 +61,8 @@ dependencies: [
 .target(
     name: "YourApp",
     dependencies: [
-        .product(name: "PaspoID", package: "paspo-ios-sdk"),      // core, headless API
-        .product(name: "PaspoIDUI", package: "paspo-ios-sdk"),    // optional, ready-made button
+        .product(name: "PaspoID", package: "ios"),      // core, headless API
+        .product(name: "PaspoIDUI", package: "ios"),    // optional, ready-made button
     ]
 )
 ```

@@ -43,13 +43,13 @@ SDK добавляет в ваше iOS-приложение вход через 
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/pingocean/paspo-ios-sdk", from: "1.0.0"),
+    .package(url: "https://github.com/paspoid/ios", from: "1.0.0"),
 ]
 ```
 
 ```swift
-.product(name: "PaspoID", package: "paspo-ios-sdk"),      // ядро, headless API
-.product(name: "PaspoIDUI", package: "paspo-ios-sdk"),    // опционально, готовая кнопка
+.product(name: "PaspoID", package: "ios"),      // ядро, headless API
+.product(name: "PaspoIDUI", package: "ios"),    // опционально, готовая кнопка
 ```
 
 В Xcode: **File → Add Package Dependencies…** и вставьте URL репозитория.

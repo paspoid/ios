@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.homepage         = 'https://paspo.id'
   s.license          = { type: 'Apache-2.0', file: 'LICENSE' }
   s.author           = { 'PingOcean LLP' => 'https://pingocean.com' }
-  s.source           = { git: 'https://github.com/pingocean/paspo-ios-sdk.git', tag: s.version.to_s }
+  s.source           = { git: 'https://github.com/paspoid/ios.git', tag: s.version.to_s }
 
   s.ios.deployment_target = '15.0'
   s.swift_versions   = ['5.9']
