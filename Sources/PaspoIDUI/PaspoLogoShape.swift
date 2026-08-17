@@ -1,0 +1,123 @@
+import SwiftUI
+
+/// Paspo ID mark, ported from the Android SDK's `paspo_id_logo.xml` vector drawable so both
+/// platforms render an identical logo. Drawn as a shape rather than shipped as an asset, which
+/// keeps the package resource-free and lets the mark take the button's foreground colour.
+public struct PaspoLogoShape: Shape {
+    /// Viewport of the source drawable.
+    private static let viewport: CGFloat = 70
+    /// Group transform of the source drawable.
+    private static let translation = CGPoint(x: -6.629, y: -6.923)
+
+    public init() {}
+
+    public func path(in rect: CGRect) -> Path {
+        let side = min(rect.width, rect.height)
+        let scale = side / Self.viewport
+        let offsetX = rect.minX + (rect.width - side) / 2
+        let offsetY = rect.minY + (rect.height - side) / 2
+
+        var transform = CGAffineTransform(translationX: offsetX, y: offsetY)
+            .scaledBy(x: scale, y: scale)
+            .translatedBy(x: Self.translation.x, y: Self.translation.y)
+
+        let parsed = SVGPathParser.parse(Self.pathData)
+        return Path(parsed.copy(using: &transform) ?? parsed)
+    }
+}
+
+/// Minimal SVG path reader: absolute/relative move, line, cubic curve and close — the only
+/// commands the Paspo mark uses.
+enum SVGPathParser {
+    static func parse(_ data: String) -> CGPath {
+        let path = CGMutablePath()
+        var current = CGPoint.zero
+        var start = CGPoint.zero
+        var command: Character?
+        var numbers: [CGFloat] = []
+
+        func flush() {
+            guard let command else { return }
+            let isRelative = command.isLowercase
+            func point(_ index: Int) -> CGPoint {
+                let raw = CGPoint(x: numbers[index], y: numbers[index + 1])
+                return isRelative ? CGPoint(x: current.x + raw.x, y: current.y + raw.y) : raw
+            }
+
+            switch Character(command.lowercased()) {
+            case "m":
+                var index = 0
+                while index + 1 < numbers.count {
+                    let target = point(index)
+                    if index == 0 {
+                        path.move(to: target)
+                        start = target
+                    } else {
+                        path.addLine(to: target)
+                    }
+                    current = target
+                    index += 2
+                }
+            case "l":
+                var index = 0
+                while index + 1 < numbers.count {
+                    let target = point(index)
+                    path.addLine(to: target)
+                    current = target
+                    index += 2
+                }
+            case "c":
+                var index = 0
+                while index + 5 < numbers.count {
+                    let control1 = point(index)
+                    let control2 = point(index + 2)
+                    let target = point(index + 4)
+                    path.addCurve(to: target, control1: control1, control2: control2)
+                    current = target
+                    index += 6
+                }
+            case "z":
+                path.closeSubpath()
+                current = start
+            default:
+                break
+            }
+            numbers.removeAll(keepingCapacity: true)
+        }
+
+        var buffer = ""
+        func commitNumber() {
+            if let value = Double(buffer) { numbers.append(CGFloat(value)) }
+            buffer = ""
+        }
+
+        for character in data {
+            switch character {
+            case "M", "m", "L", "l", "C", "c", "Z", "z":
+                commitNumber()
+                flush()
+                command = character
+                if character == "Z" || character == "z" { flush() }
+            case ",", " ", "\n", "\t":
+                commitNumber()
+            case "-":
+                // A minus starts a new number unless it follows an exponent marker.
+                if buffer.isEmpty == false, buffer.hasSuffix("e") == false, buffer.hasSuffix("E") == false {
+                    commitNumber()
+                }
+                buffer.append(character)
+            default:
+                buffer.append(character)
+            }
+        }
+        commitNumber()
+        flush()
+
+        return path
+    }
+}
+
+extension PaspoLogoShape {
+    // swiftlint:disable:next line_length
+    static let pathData = "M41.412,16.327C47.458,16.327 53.162,17.627 58.523,20.229C63.885,22.83 68.362,26.589 71.955,31.505C72.355,32.02 72.483,32.477 72.34,32.877C72.198,33.278 71.955,33.62 71.613,33.906C71.271,34.192 70.872,34.321 70.415,34.292C69.959,34.264 69.56,34.021 69.218,33.563C66.081,29.104 62.045,25.688 57.111,23.316C52.178,20.943 46.944,19.757 41.412,19.757C35.879,19.757 30.689,20.943 25.84,23.316C20.992,25.688 16.971,29.104 13.777,33.563C13.435,34.078 13.036,34.364 12.579,34.421C12.123,34.478 11.724,34.364 11.382,34.078C10.982,33.792 10.74,33.435 10.654,33.006C10.569,32.577 10.697,32.134 11.039,31.677C14.576,26.817 19.01,23.044 24.343,20.357C29.676,17.67 35.366,16.327 41.412,16.327ZM41.412,24.388C49.112,24.388 55.728,26.96 61.261,32.105C66.794,37.251 69.56,43.625 69.56,51.229C69.56,54.087 68.548,56.474 66.523,58.389C64.498,60.304 62.031,61.262 59.122,61.262C56.213,61.262 53.718,60.304 51.636,58.389C49.554,56.474 48.513,54.087 48.513,51.229C48.513,49.342 47.814,47.756 46.417,46.469C45.019,45.183 43.351,44.54 41.412,44.54C39.472,44.54 37.804,45.183 36.407,46.469C35.009,47.756 34.311,49.342 34.311,51.229C34.311,56.774 35.951,61.405 39.23,65.121C42.51,68.837 46.745,71.438 51.935,72.924C52.449,73.096 52.791,73.382 52.962,73.782C53.133,74.182 53.162,74.611 53.048,75.068C52.933,75.468 52.705,75.812 52.363,76.097C52.021,76.383 51.593,76.469 51.08,76.355C45.148,74.868 40.3,71.91 36.535,67.479C32.771,63.048 30.888,57.632 30.888,51.229C30.888,48.37 31.915,45.969 33.968,44.025C36.022,42.082 38.503,41.11 41.412,41.11C44.321,41.11 46.802,42.082 48.855,44.025C50.909,45.969 51.935,48.37 51.935,51.229C51.935,53.115 52.648,54.702 54.074,55.988C55.5,57.274 57.183,57.917 59.122,57.917C61.061,57.917 62.715,57.274 64.084,55.988C65.453,54.702 66.138,53.115 66.138,51.229C66.138,44.597 63.714,39.023 58.865,34.507C54.017,29.99 48.228,27.732 41.497,27.732C34.767,27.732 28.978,29.99 24.129,34.507C19.281,39.023 16.857,44.568 16.857,51.143C16.857,52.515 16.985,54.23 17.242,56.288C17.499,58.346 18.112,60.747 19.082,63.492C19.253,64.006 19.238,64.463 19.039,64.864C18.839,65.264 18.511,65.55 18.055,65.721C17.599,65.893 17.156,65.878 16.729,65.678C16.301,65.478 16.001,65.149 15.83,64.692C14.975,62.462 14.362,60.247 13.991,58.046C13.62,55.845 13.435,53.573 13.435,51.229C13.435,43.625 16.187,37.251 21.691,32.105C27.195,26.96 33.769,24.388 41.412,24.388ZM41.412,7.923C45.062,7.923 48.627,8.366 52.106,9.252C55.586,10.138 58.951,11.41 62.202,13.068C62.715,13.354 63.015,13.697 63.1,14.097C63.186,14.497 63.143,14.898 62.972,15.298C62.801,15.698 62.516,16.012 62.117,16.241C61.717,16.47 61.232,16.441 60.662,16.155C57.639,14.612 54.516,13.425 51.294,12.596C48.071,11.767 44.777,11.353 41.412,11.353C38.104,11.353 34.853,11.739 31.658,12.511C28.464,13.283 25.413,14.497 22.504,16.155C22.048,16.441 21.591,16.513 21.135,16.37C20.679,16.227 20.336,15.927 20.108,15.469C19.88,15.012 19.823,14.597 19.937,14.226C20.051,13.854 20.336,13.526 20.793,13.24C23.987,11.524 27.323,10.21 30.803,9.295C34.282,8.38 37.818,7.923 41.412,7.923ZM41.412,32.706C46.716,32.706 51.279,34.492 55.101,38.065C58.922,41.639 60.833,46.026 60.833,51.229C60.833,51.743 60.676,52.158 60.363,52.472C60.049,52.786 59.635,52.944 59.122,52.944C58.666,52.944 58.266,52.786 57.924,52.472C57.582,52.158 57.411,51.743 57.411,51.229C57.411,46.941 55.828,43.354 52.662,40.466C49.497,37.579 45.747,36.136 41.412,36.136C37.077,36.136 33.355,37.579 30.247,40.466C27.138,43.354 25.584,46.941 25.584,51.229C25.584,55.859 26.382,59.79 27.979,63.02C29.576,66.25 31.915,69.494 34.995,72.753C35.337,73.096 35.508,73.496 35.508,73.953C35.508,74.411 35.337,74.811 34.995,75.154C34.653,75.497 34.254,75.669 33.797,75.669C33.341,75.669 32.942,75.497 32.599,75.154C29.234,71.609 26.653,67.994 24.857,64.306C23.06,60.619 22.162,56.26 22.162,51.229C22.162,46.026 24.044,41.639 27.808,38.065C31.573,34.492 36.107,32.706 41.412,32.706ZM41.326,49.514C41.84,49.514 42.253,49.685 42.567,50.028C42.881,50.371 43.037,50.771 43.037,51.229C43.037,55.516 44.577,59.032 47.657,61.776C50.737,64.521 54.331,65.893 58.438,65.893C58.78,65.893 59.265,65.864 59.892,65.807C60.519,65.75 61.175,65.664 61.86,65.55C62.373,65.435 62.815,65.507 63.186,65.764C63.557,66.021 63.799,66.407 63.913,66.922C64.027,67.379 63.942,67.779 63.657,68.122C63.371,68.465 63.001,68.694 62.544,68.808C61.518,69.094 60.619,69.251 59.849,69.28C59.079,69.309 58.609,69.323 58.438,69.323C53.361,69.323 48.955,67.608 45.219,64.177C41.483,60.747 39.615,56.431 39.615,51.229C39.615,50.771 39.772,50.371 40.086,50.028C40.399,49.685 40.813,49.514 41.326,49.514Z"
+}
