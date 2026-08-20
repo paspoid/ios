@@ -82,7 +82,7 @@ public final class PaspoSignInButtonView: UIControl {
     }
 
     private func reload() {
-        let colors = theme.colors(for: traitCollection.userInterfaceStyle == .dark ? .dark : .light)
+        let colors = theme.colors
         hostingController?.rootView = AnyView(
             PaspoSignInButtonContent(
                 colors: colors,

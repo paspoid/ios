@@ -27,19 +27,35 @@ public struct PaspoButtonColors: Sendable, Equatable {
 
 extension PaspoButtonTheme {
     /// Brand blue of Paspo ID.
-    static let brandColor = Color(red: 0.09, green: 0.36, blue: 0.90)
+    static let brandColor = Color(hex: 0x1677FF)
 
-    func colors(for colorScheme: ColorScheme) -> PaspoButtonColors {
+    /// Deliberately independent of the host's colour scheme, exactly like the Android SDK: a
+    /// partner app must get the same button everywhere, so the theme is the only thing that
+    /// decides the palette.
+    var colors: PaspoButtonColors {
         switch self {
         case .brand:
             return PaspoButtonColors(background: Self.brandColor, foreground: .white)
         case .light:
-            return PaspoButtonColors(background: .white, foreground: Color(white: 0.09), border: Color(white: 0.85))
+            return PaspoButtonColors(
+                background: .white,
+                foreground: Color(hex: 0x1F1F1F),
+                border: Color(hex: 0xE0E0E0)
+            )
         case .dark:
-            return PaspoButtonColors(background: Color(white: 0.09), foreground: .white)
+            return PaspoButtonColors(background: Color(hex: 0x131314), foreground: Color(hex: 0xE3E3E3))
         case .neutral:
-            let content: Color = colorScheme == .dark ? .white : Color(white: 0.09)
-            return PaspoButtonColors(background: .clear, foreground: content, border: content.opacity(0.25))
+            return PaspoButtonColors(background: Color(hex: 0xF2F2F2), foreground: Color(hex: 0x1F1F1F))
         }
+    }
+}
+
+private extension Color {
+    init(hex: UInt32) {
+        self.init(
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255
+        )
     }
 }

@@ -28,7 +28,6 @@ public struct PaspoSignInButton: View {
     private let onResult: (PaspoAuthResult) -> Void
 
     @State private var isRunning = false
-    @Environment(\.colorScheme) private var colorScheme
 
     /// - Parameters:
     ///   - paspo: SDK instance to run the flow with. Defaults to ``Paspo/shared``.
@@ -65,7 +64,7 @@ public struct PaspoSignInButton: View {
     public var body: some View {
         Button(action: run) {
             PaspoSignInButtonContent(
-                colors: theme.colors(for: colorScheme),
+                colors: theme.colors,
                 cornerRadius: cornerRadius,
                 showsLogo: showsLogo,
                 isLogoOnly: isLogoOnly,
@@ -103,58 +102,87 @@ public struct PaspoSignInButtonContent: View {
     private let isLogoOnly: Bool
     private let title: String
     private let isLoading: Bool
+    private let isEnabled: Bool
 
+    /// - Parameters:
+    ///   - theme: Predefined palette. Ignored when `colors` is given.
+    ///   - colors: Full palette override.
     public init(
-        colors: PaspoButtonColors,
+        theme: PaspoButtonTheme = .brand,
+        colors: PaspoButtonColors? = nil,
         cornerRadius: CGFloat? = nil,
         showsLogo: Bool = true,
         isLogoOnly: Bool = false,
         title: String = PaspoUIStrings.signIn,
-        isLoading: Bool = false
+        isLoading: Bool = false,
+        isEnabled: Bool = true
     ) {
-        self.colors = colors
+        self.colors = colors ?? theme.colors
         self.cornerRadius = cornerRadius
         self.showsLogo = showsLogo
         self.isLogoOnly = isLogoOnly
         self.title = title
         self.isLoading = isLoading
+        self.isEnabled = isEnabled
     }
 
     public var body: some View {
-        HStack(spacing: isLogoOnly ? 0 : 10) {
-            if showsLogo || isLogoOnly {
-                PaspoLogoShape()
-                    .fill(colors.foreground)
-                    .frame(width: 22, height: 22)
-                    .opacity(isLoading ? 0 : 1)
-                    .overlay {
-                        if isLoading {
-                            ProgressView().tint(colors.foreground)
-                        }
-                    }
-            }
-            if isLogoOnly == false {
+        content
+            .frame(minHeight: Metrics.minHeight)
+            .background(shape.fill(colors.background))
+            .overlay(shape.strokeBorder(colors.border ?? .clear, lineWidth: colors.border == nil ? 0 : 1))
+            .opacity(isEnabled ? 1 : Metrics.disabledOpacity)
+            .contentShape(shape)
+    }
+
+    /// Width follows the content, as on Android — a sign-in button is a button, not a bar, and a
+    /// host that wants it wider says so with its own `frame`.
+    @ViewBuilder
+    private var content: some View {
+        if isLogoOnly {
+            logo.frame(width: Metrics.minHeight, height: Metrics.minHeight)
+        } else {
+            HStack(spacing: Metrics.logoSpacing) {
+                if showsLogo {
+                    logo
+                }
+
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: Metrics.fontSize, weight: .medium))
                     .foregroundColor(colors.foreground)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .truncationMode(.tail)
             }
+            .padding(.horizontal, Metrics.horizontalPadding)
         }
-        .padding(.horizontal, isLogoOnly ? 14 : 20)
-        .frame(minHeight: 50)
-        .frame(maxWidth: isLogoOnly ? nil : .infinity)
-        .background(
-            shape.fill(colors.background)
-        )
-        .overlay(
-            shape.strokeBorder(colors.border ?? .clear, lineWidth: colors.border == nil ? 0 : 1)
-        )
-        .contentShape(shape)
+    }
+
+    private var logo: some View {
+        PaspoLogoShape()
+            .fill(colors.foreground)
+            .frame(width: Metrics.logoSize, height: Metrics.logoSize)
+            .opacity(isLoading ? 0 : 1)
+            .overlay {
+                if isLoading {
+                    ProgressView().tint(colors.foreground)
+                }
+            }
     }
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: cornerRadius ?? 25, style: .continuous)
+        RoundedRectangle(cornerRadius: cornerRadius ?? Metrics.pillRadius, style: .continuous)
+    }
+
+    /// Values are the Android SDK's, unit for unit.
+    private enum Metrics {
+        static let logoSize: CGFloat = 30
+        static let minHeight: CGFloat = 48
+        static let horizontalPadding: CGFloat = 16
+        static let logoSpacing: CGFloat = 12
+        static let fontSize: CGFloat = 16
+        static let disabledOpacity: Double = 0.6
+        /// A radius larger than any sensible height renders a pill whatever the height is.
+        static let pillRadius: CGFloat = 1000
     }
 }
 

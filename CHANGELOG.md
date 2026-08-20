@@ -4,6 +4,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-20
+
+### Changed
+- `PaspoSignInButton` now matches the Android SDK exactly: pill radius, 48pt minimum height, 30pt mark, 16pt horizontal padding, 12pt gap and a 16pt medium label.
+- The button sizes itself to its content instead of filling the available width. Wrap it in your own `frame` to widen it.
+- Theme palettes are the Android ones, down to the brand blue (`#1677FF`), and no longer follow the host's colour scheme - the same button renders identically in every app.
+- `PaspoSignInButtonContent` takes a `theme:` and an optional `colors:` override, and dims itself at 60% when `isEnabled` is false.
+
 ## [1.0.0] - unreleased
 
 ### Added
