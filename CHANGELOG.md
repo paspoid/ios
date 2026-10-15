@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-15
+
 ### Added
 - `PaspoID-Info.plist` from the Paspo admin panel: `Paspo.configure()` reads it, `PaspoConfiguration(bundle:)` and `PaspoConfiguration(contentsOf:)` load it and report a missing file or key by name.
 - `PaspoConfiguration.serviceID` and `region` (`PaspoRegion`: `.kz`, `.ru` or any value the panel issues).
