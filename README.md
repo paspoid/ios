@@ -92,7 +92,7 @@ Prebuilt binaries are attached to each GitHub release. Drag `PaspoID.xcframework
 |---|---|
 | `SERVICE_ID` | Public identifier of the service |
 | `REGION` | Region the service is registered in: `kz`, `ru`, … |
-| `REDIRECT_URL` | Universal Link Paspo ID opens to return the result |
+| `REDIRECT_URL` | Optional. Universal Link Paspo ID opens to return the result; defaults to `https://{region}.paspo.id/mob/s/{service_id}?flow=phone` |
 | `FALLBACK_REDIRECT_URL` | Optional custom-scheme fallback |
 | `BUNDLE_ID` | Optional; defaults to the app's bundle identifier |
 
@@ -100,7 +100,9 @@ With the file in place, `Paspo.configure()` is the whole SDK setup. A missing or
 
 Three more things live in your app's configuration, and the flow does not work without them.
 
-**1. A redirect URL.** Paspo ID returns the result by opening a URL your app owns. Use a Universal Link on a domain you control and add the associated domain:
+**1. A redirect URL.** Paspo ID returns the result by opening a URL your app owns. By default it is your service's return link, `https://{region}.paspo.id/mob/s/{service_id}?flow=phone`: Paspo serves the `apple-app-site-association` for it once the service is set up in the admin panel, so you only add the associated domain, `applinks:kz.paspo.id` for the `kz` region.
+
+To use a domain of your own instead, set `REDIRECT_URL` and add that domain:
 
 ```xml
 <!-- YourApp.entitlements -->
@@ -335,8 +337,8 @@ sequenceDiagram
 
 If Paspo ID is not installed:
 
-1. The SDK opens the Paspo ID App Clip with the same request. The user signs in there without installing anything, and the App Clip answers on your redirect URL, so `authenticate` returns the same results as with the full app.
-2. If the App Clip cannot be opened, the SDK opens your service's page in Paspo ID, `https://{region}.paspo.id/mob/s/{service_id}?flow=phone`, or `appStoreURL` when there is no `serviceID`, and returns `.notInstalled`.
+1. On iOS 17 and later the SDK opens the Paspo ID App Clip through Apple's default App Clip link, with the same request in its query. The user signs in there without installing anything, and the App Clip answers on your redirect URL, so `authenticate` returns the same results as with the full app.
+2. On earlier iOS, or if the App Clip link cannot be opened, the SDK opens your service's page in Paspo ID, `https://paspo.id/mob/s/{service_id}?flow=phone`, or `appStoreURL` when there is no `serviceID`, and returns `.notInstalled`.
 3. The `nonce` of that attempt is stored. After Paspo ID is installed and `authenticate` is called again, it is passed as a referral for install attribution.
 
 Set `appClipURL` to `nil` to skip the App Clip.
@@ -352,9 +354,11 @@ Set `appClipURL` to `nil` to skip the App Clip.
 | `bundleID` | Identifier reported to Paspo ID | main bundle's |
 | `serviceID` | Public service identifier from the admin panel | `nil` |
 | `region` | Service region from the admin panel (`PaspoRegion`, any string the panel issues) | `.kz` |
-| `appClipURL` | App Clip link the sign-in goes to when Paspo ID is missing; `nil` skips it | Paspo ID App Clip |
+| `appClipURL` | Apple's default App Clip link the sign-in goes to when Paspo ID is missing (iOS 17+); `nil` skips it | Paspo ID App Clip |
 | `appStoreURL` | Opened when neither Paspo ID nor the App Clip can sign in and there is no `serviceID` | `nil` |
-| `landingURL` | Read-only: `https://{region}.paspo.id/mob/s/{serviceID}?flow=phone` | — |
+| `landingURL` | Read-only: `https://paspo.id/mob/s/{serviceID}?flow=phone`, the service page in Paspo ID | — |
+
+`PaspoConfiguration.returnURL(serviceID:region:)` builds the return link, `https://{region}.paspo.id/mob/s/{serviceID}?flow=phone`.
 | `callbackTimeout` | Give up waiting after this long | 600 s |
 | `cancellationGracePeriod` | Delay before an absent callback counts as a cancellation | 0.7 s |
 

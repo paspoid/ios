@@ -27,8 +27,8 @@ extension PaspoConfiguration {
 
     /// Reads the configuration from `PaspoID-Info.plist` in `bundle`.
     ///
-    /// The file holds `SERVICE_ID`, `REGION` and `REDIRECT_URL`, plus optional
-    /// `FALLBACK_REDIRECT_URL` and `BUNDLE_ID`. Settings the file does not cover keep their defaults
+    /// The file holds `SERVICE_ID` and `REGION`, plus optional `REDIRECT_URL` (defaults to
+    /// ``returnURL(serviceID:region:)``), `FALLBACK_REDIRECT_URL` and `BUNDLE_ID`. Settings the file does not cover keep their defaults
     /// and can be changed on the returned value.
     public init(bundle: Bundle = .main) throws {
         let name = (Self.fileName as NSString).deletingPathExtension
@@ -67,14 +67,16 @@ extension PaspoConfiguration {
 
         guard let serviceID = string("SERVICE_ID") else { throw FileError.missingKey("SERVICE_ID") }
         guard let region = string("REGION") else { throw FileError.missingKey("REGION") }
-        guard let redirectURL = try link("REDIRECT_URL") else { throw FileError.missingKey("REDIRECT_URL") }
+        let paspoRegion = PaspoRegion(rawValue: region)
+        guard let redirectURL = try link("REDIRECT_URL") ?? Self.returnURL(serviceID: serviceID, region: paspoRegion)
+        else { throw FileError.invalidURL(key: "SERVICE_ID") }
 
         self.init(
             redirectURL: redirectURL,
             fallbackRedirectURL: try link("FALLBACK_REDIRECT_URL"),
             bundleID: string("BUNDLE_ID") ?? Bundle.main.bundleIdentifier ?? "",
             serviceID: serviceID,
-            region: PaspoRegion(rawValue: region)
+            region: paspoRegion
         )
     }
 }

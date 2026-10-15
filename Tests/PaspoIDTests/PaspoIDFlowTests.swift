@@ -133,8 +133,8 @@ final class PaspoIDFlowTests: XCTestCase {
         let result = await sdk.authenticate(scope: .phones, nonce: "n-2")
 
         XCTAssertEqual(result, .notInstalled)
-        XCTAssertEqual(opener.openedURLs.map(\.host), ["appclip.apple.com", "kz.paspo.id"])
-        XCTAssertEqual(opener.openedURLs.last?.absoluteString, "https://kz.paspo.id/mob/s/S6eFaRtr?flow=phone")
+        XCTAssertEqual(opener.openedURLs.map(\.host), ["appclip.apple.com", "paspo.id"])
+        XCTAssertEqual(opener.openedURLs.last?.absoluteString, "https://paspo.id/mob/s/S6eFaRtr?flow=phone")
         XCTAssertEqual(PaspoReferralStore(defaults: defaults).load(), "n-2")
     }
 
@@ -185,6 +185,24 @@ final class PaspoIDFlowTests: XCTestCase {
         XCTAssertTrue(sdk.handle(url: callbackURL))
         let resultTask = await task.value
         XCTAssertEqual(resultTask, .success(authCode: "code"))
+    }
+
+    func testCallbackOnTheRegionReturnLinkIsAccepted() async throws {
+        let returnURL = try XCTUnwrap(PaspoConfiguration.returnURL(serviceID: "S6eFaRtr", region: .kz))
+        let (sdk, opener) = makeSDK(fallbackRedirectURL: returnURL, defaults: try makeDefaults())
+        let (task, request) = try await startFlow(sdk, opener)
+
+        let envelope = try PaspoEncryptedEnvelope.seal(
+            PaspoSSOResult.success(nonce: "code"),
+            recipientPublicKeyDER: request.clientPublicKeyDER
+        )
+        let callbackURL = try XCTUnwrap(
+            try PaspoAuthCallback.success(state: request.state, envelope: envelope).makeURL(redirectURL: returnURL)
+        )
+
+        XCTAssertTrue(sdk.handle(url: callbackURL))
+        let result = await task.value
+        XCTAssertEqual(result, .success(authCode: "code"))
     }
 
     func testCallbackWithForeignStateIsIgnored() async throws {

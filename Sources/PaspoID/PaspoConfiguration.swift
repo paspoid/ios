@@ -23,18 +23,19 @@ public struct PaspoConfiguration: Sendable {
 
     /// Public identifier of your service, issued in the Paspo admin panel together with ``region``.
     ///
-    /// Enables the service landing page (``landingURL``), opened when neither Paspo ID nor its
+    /// Enables the service page in Paspo ID (``landingURL``), opened when neither Paspo ID nor its
     /// App Clip can take the sign-in.
     public var serviceID: String?
 
-    /// Region your service is registered in, issued in the Paspo admin panel.
+    /// Region your service is registered in, issued in the Paspo admin panel. Sets the host of the
+    /// link that returns users to your app (``returnURL(serviceID:region:)``).
     public var region: PaspoRegion
 
-    /// App Clip link the sign-in is handed to when Paspo ID is not installed; the SDK appends the
-    /// request to its query. `nil` skips the App Clip.
+    /// App Clip link the sign-in is handed to when Paspo ID is not installed (iOS 17 and later);
+    /// the SDK appends the request to its query. `nil` skips the App Clip.
     ///
-    /// Defaults to Apple's App Clip link for Paspo ID. Point it at `https://paspo.id/clip/sso` to
-    /// test with a Local Experience before the App Clip is live on your device.
+    /// Must be Apple's default App Clip link: iOS launches another app's App Clip from a plain link
+    /// only in that form, any other URL ends up in Safari.
     public var appClipURL: URL?
 
     /// App Store page opened when Paspo ID is not installed and there is no ``landingURL``.
@@ -73,13 +74,24 @@ public struct PaspoConfiguration: Sendable {
     /// Apple's App Clip link for Paspo ID.
     public static let paspoAppClipURL = URL(string: "https://appclip.apple.com/id?p=paspo.id.Clip")!
 
-    /// `https://{region}.paspo.id/mob/s/{serviceID}?flow=phone`: your service's page in Paspo ID,
-    /// which installs Paspo ID and starts sign-up with a phone number. `nil` without ``serviceID``.
+    /// `https://paspo.id/mob/s/{serviceID}?flow=phone`: your service's page in Paspo ID, which
+    /// installs Paspo ID and starts sign-up with a phone number. `nil` without ``serviceID``.
     public var landingURL: URL? {
         guard let serviceID, serviceID.isEmpty == false else { return nil }
+        return Self.serviceLink(host: "paspo.id", serviceID: serviceID)
+    }
+
+    /// `https://{region}.paspo.id/mob/s/{serviceID}?flow=phone`: the link Paspo ID and its App Clip
+    /// open to return users to your app. Paspo serves it as a Universal Link of your app once the
+    /// service is set up in the admin panel; add `applinks:{region}.paspo.id` to your entitlements.
+    public static func returnURL(serviceID: String, region: PaspoRegion) -> URL? {
+        serviceLink(host: "\(region.rawValue).paspo.id", serviceID: serviceID)
+    }
+
+    private static func serviceLink(host: String, serviceID: String) -> URL? {
         var components = URLComponents()
         components.scheme = "https"
-        components.host = "\(region.rawValue).paspo.id"
+        components.host = host
         components.path = "/mob/s/\(serviceID)"
         components.queryItems = [URLQueryItem(name: "flow", value: "phone")]
         return components.url

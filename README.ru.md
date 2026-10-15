@@ -73,13 +73,15 @@ pod 'PaspoIDUI', '~> 1.0'
 |---|---|
 | `SERVICE_ID` | Публичный идентификатор сервиса |
 | `REGION` | Регион, в котором зарегистрирован сервис: `kz`, `ru`, … |
-| `REDIRECT_URL` | Universal Link, через который Paspo ID вернёт результат |
+| `REDIRECT_URL` | Необязательно. Universal Link, через который Paspo ID вернёт результат; по умолчанию `https://{region}.paspo.id/mob/s/{service_id}?flow=phone` |
 | `FALLBACK_REDIRECT_URL` | Необязательная запасная custom-схема |
 | `BUNDLE_ID` | Необязательно; по умолчанию bundle identifier приложения |
 
 С файлом вся настройка SDK — один вызов `Paspo.configure()`. Если файла нет или он битый, debug-сборка остановится и напишет причину.
 
-**1. Redirect URL.** Paspo ID возвращает результат, открывая URL, принадлежащий вашему приложению. Используйте Universal Link на своём домене:
+**1. Redirect URL.** Paspo ID возвращает результат, открывая URL, принадлежащий вашему приложению. По умолчанию это ссылка возврата сервиса `https://{region}.paspo.id/mob/s/{service_id}?flow=phone`: `apple-app-site-association` для неё отдаёт Paspo, как только сервис настроен в админке. Вам остаётся добавить associated domain, для региона `kz` это `applinks:kz.paspo.id`.
+
+Чтобы возвращаться через свой домен, задайте `REDIRECT_URL` и добавьте этот домен:
 
 ```xml
 <key>com.apple.developer.associated-domains</key>
@@ -202,8 +204,8 @@ if Paspo.shared.isPaspoInstalled { /* приложение установлен�
 
 Если Paspo ID не установлен:
 
-1. SDK открывает App Clip Paspo ID с тем же запросом. Пользователь входит в нём без установки, App Clip отвечает на ваш redirect URL, и `authenticate` возвращает те же результаты, что и с полным приложением.
-2. Если App Clip открыть не удалось, SDK открывает страницу сервиса в Paspo ID `https://{region}.paspo.id/mob/s/{service_id}?flow=phone` (или `appStoreURL`, если `serviceID` не задан) и возвращает `.notInstalled`.
+1. На iOS 17 и новее SDK открывает App Clip Paspo ID по стандартной ссылке Apple, передавая в ней тот же запрос. Пользователь входит в App Clip без установки, App Clip отвечает на ваш redirect URL, и `authenticate` возвращает те же результаты, что и с полным приложением.
+2. На более старых iOS или если ссылку App Clip открыть не удалось, SDK открывает страницу сервиса в Paspo ID `https://paspo.id/mob/s/{service_id}?flow=phone` (или `appStoreURL`, если `serviceID` не задан) и возвращает `.notInstalled`.
 3. `nonce` этой попытки сохраняется и после установки Paspo ID уходит со следующим входом как реферал.
 
 Чтобы не открывать App Clip, задайте `appClipURL = nil`.

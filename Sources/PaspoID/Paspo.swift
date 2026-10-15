@@ -118,7 +118,7 @@ public final class Paspo {
         resolvePending(with: .cancelled)
 
         guard isPaspoInstalled else {
-            if let appClipURL = configuration.appClipURL {
+            if let appClipURL = configuration.appClipURL, Self.canLaunchAppClips {
                 let result = await run(scope: scope, nonce: nonce) { appClipLink(appClipURL, carrying: $0) }
                 guard case .failure(.serviceUnavailable, _) = result else { return result }
             }
@@ -240,6 +240,12 @@ public final class Paspo {
         }
         components.queryItems = items + requestItems
         return components.url
+    }
+
+    /// Apps launch other apps' App Clips from iOS 17; earlier the link only opens Safari.
+    private static var canLaunchAppClips: Bool {
+        if #available(iOS 17, macOS 14, *) { return true }
+        return false
     }
 
     private static var applicationName: String? {
