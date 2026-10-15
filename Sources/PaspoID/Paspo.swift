@@ -31,6 +31,18 @@ public final class Paspo {
         sharedInstance = Paspo(configuration: configuration)
     }
 
+    /// Configures ``shared`` from `PaspoID-Info.plist`, the file downloaded from the Paspo admin panel.
+    ///
+    /// A missing or broken file traps in debug builds with the reason, and leaves ``shared``
+    /// non-functional in release builds.
+    public static func configure(bundle: Bundle = .main) {
+        do {
+            configure(try PaspoConfiguration(bundle: bundle))
+        } catch {
+            assertionFailure("Paspo ID: \(error)")
+        }
+    }
+
     /// Process-wide instance configured with ``configure(_:)``.
     ///
     /// Convenient when the flow is started from one place and callbacks arrive in another
@@ -103,16 +115,28 @@ public final class Paspo {
             return .failure(error: .invalidRequest, message: "Empty bundle identifier")
         }
 
+        resolvePending(with: .cancelled)
+
         guard isPaspoInstalled else {
+            if let appClipURL = configuration.appClipURL {
+                let result = await run(scope: scope, nonce: nonce) { appClipLink(appClipURL, carrying: $0) }
+                guard case .failure(.serviceUnavailable, _) = result else { return result }
+            }
             referralStore.save(nonce: nonce)
-            if let appStoreURL = configuration.appStoreURL {
-                _ = await urlOpener.open(appStoreURL)
+            if let page = configuration.landingURL ?? configuration.appStoreURL {
+                _ = await urlOpener.open(page)
             }
             return .notInstalled
         }
 
-        resolvePending(with: .cancelled)
+        return await run(scope: scope, nonce: nonce) { $0 }
+    }
 
+    /// Opens the request built for `nonce` and waits for its callback.
+    ///
+    /// - Parameter link: Turns the `paspo://sso` request into the URL to open.
+    /// - Returns: `.failure(.serviceUnavailable)` when the URL could not be opened.
+    private func run(scope: PaspoScope, nonce: String, link: (URL) -> URL?) async -> PaspoAuthResult {
         let privateKey = P256.KeyAgreement.PrivateKey()
         let state = UUID().uuidString
         let request = PaspoAuthRequest(
@@ -125,7 +149,7 @@ public final class Paspo {
             referralNonce: referralStore.load()
         )
 
-        guard let url = request.makeURL() else {
+        guard let url = request.makeURL().flatMap(link) else {
             return .failure(error: .invalidRequest, message: "Failed to build the request URL")
         }
 
@@ -203,6 +227,25 @@ public final class Paspo {
     }
 
     // MARK: - Private
+
+    /// The App Clip link with the request's query appended; the App Clip reads the same query as
+    /// `paspo://sso` and answers on the same redirect URL. `client` names the app on the clip's screens.
+    private func appClipLink(_ appClipURL: URL, carrying request: URL) -> URL? {
+        guard var components = URLComponents(url: appClipURL, resolvingAgainstBaseURL: false),
+              let requestItems = URLComponents(url: request, resolvingAgainstBaseURL: false)?.queryItems
+        else { return nil }
+        var items = components.queryItems ?? []
+        if let name = Self.applicationName {
+            items.append(URLQueryItem(name: "client", value: name))
+        }
+        components.queryItems = items + requestItems
+        return components.url
+    }
+
+    private static var applicationName: String? {
+        let info = Bundle.main.infoDictionary
+        return (info?["CFBundleDisplayName"] as? String) ?? (info?["CFBundleName"] as? String)
+    }
 
     private func decrypt(envelope: PaspoEncryptedEnvelope, privateKey: P256.KeyAgreement.PrivateKey) -> PaspoAuthResult {
         do {

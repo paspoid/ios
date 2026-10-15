@@ -11,6 +11,8 @@ final class PaspoIDFlowTests: XCTestCase {
     private func makeSDK(
         isPaspoInstalled: Bool = true,
         fallbackRedirectURL: URL? = nil,
+        serviceID: String? = nil,
+        appClipURL: URL? = nil,
         defaults: UserDefaults
     ) -> (Paspo, FakeURLOpener) {
         let opener = FakeURLOpener(canOpenAnything: isPaspoInstalled)
@@ -18,6 +20,8 @@ final class PaspoIDFlowTests: XCTestCase {
             redirectURL: redirectURL,
             fallbackRedirectURL: fallbackRedirectURL,
             bundleID: "paspo.id.demo",
+            serviceID: serviceID,
+            appClipURL: appClipURL,
             appStoreURL: appStoreURL,
             callbackTimeout: 0,
             cancellationGracePeriod: 0
@@ -85,6 +89,53 @@ final class PaspoIDFlowTests: XCTestCase {
         XCTAssertEqual(result, .notInstalled)
         XCTAssertEqual(opener.openedURLs, [appStoreURL])
         XCTAssertEqual(PaspoReferralStore(defaults: defaults).load(), "n-1")
+    }
+
+    func testMissingPaspoHandsTheRequestToTheAppClip() async throws {
+        let defaults = try makeDefaults()
+        let (sdk, opener) = makeSDK(
+            isPaspoInstalled: false,
+            appClipURL: PaspoConfiguration.paspoAppClipURL,
+            defaults: defaults
+        )
+
+        let task = Task { await sdk.authenticate(scope: .phones, nonce: "n-clip") }
+        let clipURL = try await opener.waitForOpenedURL()
+        let items = try XCTUnwrap(URLComponents(url: clipURL, resolvingAgainstBaseURL: false)?.queryItems)
+
+        XCTAssertEqual(clipURL.host, "appclip.apple.com")
+        XCTAssertEqual(items.first { $0.name == "p" }?.value, "paspo.id.Clip")
+        // The clip parses the very query the full app gets on paspo://sso.
+        var asRequest = URLComponents()
+        asRequest.scheme = PaspoSSOConstants.paspoScheme
+        asRequest.host = PaspoSSOConstants.ssoHost
+        asRequest.queryItems = items
+        let request = try XCTUnwrap(asRequest.url.flatMap(PaspoAuthRequest.parse(url:)))
+        XCTAssertEqual(request.nonce, "n-clip")
+        XCTAssertEqual(request.redirectURL, redirectURL)
+
+        sdk.cleanup()
+        let result = await task.value
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertNil(PaspoReferralStore(defaults: defaults).load())
+    }
+
+    func testAppClipThatCannotOpenFallsBackToTheServiceLanding() async throws {
+        let defaults = try makeDefaults()
+        let (sdk, opener) = makeSDK(
+            isPaspoInstalled: false,
+            serviceID: "S6eFaRtr",
+            appClipURL: PaspoConfiguration.paspoAppClipURL,
+            defaults: defaults
+        )
+        opener.failingHosts = ["appclip.apple.com"]
+
+        let result = await sdk.authenticate(scope: .phones, nonce: "n-2")
+
+        XCTAssertEqual(result, .notInstalled)
+        XCTAssertEqual(opener.openedURLs.map(\.host), ["appclip.apple.com", "kz.paspo.id"])
+        XCTAssertEqual(opener.openedURLs.last?.absoluteString, "https://kz.paspo.id/mob/s/S6eFaRtr?flow=phone")
+        XCTAssertEqual(PaspoReferralStore(defaults: defaults).load(), "n-2")
     }
 
     func testStoredReferralIsSentWithTheNextAttempt() async throws {
@@ -258,6 +309,7 @@ private final class FakeURLOpener: PaspoURLOpening {
     private(set) var openedURLs: [URL] = []
     var canOpenAnything: Bool
     var openSucceeds = true
+    var failingHosts: Set<String> = []
 
     private var waiters: [CheckedContinuation<URL, Never>] = []
     private var consumed = 0
@@ -276,7 +328,7 @@ private final class FakeURLOpener: PaspoURLOpening {
             consumed += 1
             waiters.removeFirst().resume(returning: url)
         }
-        return openSucceeds
+        return openSucceeds && failingHosts.contains(url.host ?? "") == false
     }
 
     /// Waits for the next `open` call that no earlier `waitForOpenedURL` has already taken.

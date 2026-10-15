@@ -4,6 +4,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- `PaspoID-Info.plist` from the Paspo admin panel: `Paspo.configure()` reads it, `PaspoConfiguration(bundle:)` and `PaspoConfiguration(contentsOf:)` load it and report a missing file or key by name.
+- `PaspoConfiguration.serviceID` and `region` (`PaspoRegion`: `.kz`, `.ru` or any value the panel issues), and the derived `landingURL`, `https://{region}.paspo.id/mob/s/{serviceID}?flow=phone`.
+- `PaspoConfiguration.appClipURL`: when Paspo ID is not installed, the sign-in goes to the Paspo ID App Clip and comes back through `handle(url:)` like a normal one. `nil` turns it off.
+
+### Changed
+- Without Paspo ID, `authenticate` tries the App Clip first, then opens `landingURL` (or `appStoreURL` without a `serviceID`) and returns `.notInstalled`.
+- Starting a sign-in while Paspo ID is missing cancels the flow already in progress, as it does when Paspo ID is installed.
+
 ## [1.0.2] - 2026-08-20
 
 ### Changed

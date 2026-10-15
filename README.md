@@ -86,7 +86,19 @@ Prebuilt binaries are attached to each GitHub release. Drag `PaspoID.xcframework
 
 ## Project setup
 
-Three things live in your app's configuration, and the flow does not work without them.
+**0. The configuration file.** Add your service in the Paspo admin panel and download `PaspoID-Info.plist`. Drag it into the app target (check "Copy items if needed" and the target membership). The file carries everything the SDK needs to know about your service:
+
+| Key | Meaning |
+|---|---|
+| `SERVICE_ID` | Public identifier of the service |
+| `REGION` | Region the service is registered in: `kz`, `ru`, … |
+| `REDIRECT_URL` | Universal Link Paspo ID opens to return the result |
+| `FALLBACK_REDIRECT_URL` | Optional custom-scheme fallback |
+| `BUNDLE_ID` | Optional; defaults to the app's bundle identifier |
+
+With the file in place, `Paspo.configure()` is the whole SDK setup. A missing or broken file stops a debug build with the reason.
+
+Three more things live in your app's configuration, and the flow does not work without them.
 
 **1. A redirect URL.** Paspo ID returns the result by opening a URL your app owns. Use a Universal Link on a domain you control and add the associated domain:
 
@@ -128,12 +140,7 @@ Both URLs must be registered with Paspo during onboarding — the app rejects re
 @main
 struct YourApp: App {
     init() {
-        Paspo.configure(
-            PaspoConfiguration(
-                redirectURL: URL(string: "https://your.app/paspo/callback")!,
-                fallbackRedirectURL: URL(string: "yourapp://paspo-callback")!
-            )
-        )
+        Paspo.configure() // reads PaspoID-Info.plist
     }
 
     var body: some Scene {
@@ -150,6 +157,21 @@ struct YourApp: App {
 ```
 
 In UIKit, call `Paspo.shared.handle(url:)` from `scene(_:openURLContexts:)`, `scene(_:continue:)` and `scene(_:willConnectTo:options:)`.
+
+Without the file, pass the same values in code:
+
+```swift
+Paspo.configure(
+    PaspoConfiguration(
+        redirectURL: URL(string: "https://your.app/paspo/callback")!,
+        fallbackRedirectURL: URL(string: "yourapp://paspo-callback")!,
+        serviceID: "S6eFaRtr",
+        region: .kz
+    )
+)
+```
+
+To change a setting the file does not cover, load it and adjust: `var configuration = try PaspoConfiguration(); configuration.callbackTimeout = 300; Paspo.configure(configuration)`.
 
 ## Quick start: the ready-made button
 
@@ -279,7 +301,7 @@ if Paspo.shared.isPaspoInstalled {
 }
 ```
 
-This check is optional: `authenticate` performs it itself and, when Paspo ID is missing, opens the App Store page from `PaspoConfiguration.appStoreURL` and returns `.notInstalled`.
+This check is optional: `authenticate` performs it itself and, when Paspo ID is missing, hands the sign-in to the Paspo ID App Clip (see [Authentication flow](#authentication-flow)).
 
 `cleanup()` drops the pending flow and its ephemeral key. The SDK calls it automatically on completion and on errors; call it manually only when abandoning a flow yourself, for example when the user leaves the sign-in screen.
 
@@ -311,7 +333,13 @@ sequenceDiagram
 4. Upon confirmation, Paspo ID opens the redirect URL with an encrypted response; the SDK decrypts it and returns `.success(authCode:)`.
 5. The application sends the code to its server, which exchanges it with Paspo for the user's data (see the Paspo server documentation).
 
-If Paspo ID is not installed, the SDK stores the `nonce`, opens the App Store and returns `.notInstalled`. After Paspo ID is installed and `authenticate` is called again, the stored nonce is passed as a referral for install attribution.
+If Paspo ID is not installed:
+
+1. The SDK opens the Paspo ID App Clip with the same request. The user signs in there without installing anything, and the App Clip answers on your redirect URL, so `authenticate` returns the same results as with the full app.
+2. If the App Clip cannot be opened, the SDK opens your service's page in Paspo ID, `https://{region}.paspo.id/mob/s/{service_id}?flow=phone`, or `appStoreURL` when there is no `serviceID`, and returns `.notInstalled`.
+3. The `nonce` of that attempt is stored. After Paspo ID is installed and `authenticate` is called again, it is passed as a referral for install attribution.
+
+Set `appClipURL` to `nil` to skip the App Clip.
 
 ## Reference
 
@@ -322,7 +350,11 @@ If Paspo ID is not installed, the SDK stores the `nonce`, opens the App Store an
 | `redirectURL` | Universal Link Paspo ID opens to return the result | required |
 | `fallbackRedirectURL` | Custom-scheme fallback, mainly for development | `nil` |
 | `bundleID` | Identifier reported to Paspo ID | main bundle's |
-| `appStoreURL` | Opened when Paspo ID is missing | `nil` |
+| `serviceID` | Public service identifier from the admin panel | `nil` |
+| `region` | Service region from the admin panel (`PaspoRegion`, any string the panel issues) | `.kz` |
+| `appClipURL` | App Clip link the sign-in goes to when Paspo ID is missing; `nil` skips it | Paspo ID App Clip |
+| `appStoreURL` | Opened when neither Paspo ID nor the App Clip can sign in and there is no `serviceID` | `nil` |
+| `landingURL` | Read-only: `https://{region}.paspo.id/mob/s/{serviceID}?flow=phone` | — |
 | `callbackTimeout` | Give up waiting after this long | 600 s |
 | `cancellationGracePeriod` | Delay before an absent callback counts as a cancellation | 0.7 s |
 
@@ -343,7 +375,7 @@ The profile data requested from the user:
 |---|---|---|
 | `.success` | `authCode: String` | Send `authCode` to your server |
 | `.cancelled` | — | The user dismissed the consent screen; typically no error UI is needed |
-| `.notInstalled` | — | Paspo ID is not installed; the SDK has opened the App Store |
+| `.notInstalled` | — | Neither Paspo ID nor its App Clip could sign in; the SDK has opened the service page or the App Store |
 | `.failure` | `error: PaspoClientError`, `message: String?` | Present an error. `message` is intended for logs, not for the user |
 
 `.cancelled` and `.notInstalled` are separate cases and never appear inside `.failure`.
@@ -385,7 +417,7 @@ The codes are identical to the Android SDK, so one error table serves both platf
 The SDK itself does not; it communicates with Paspo ID over URLs. Paspo and your server must be online.
 
 **What happens if the user uninstalls Paspo between sign-ins?**
-`authenticate` detects this, opens the App Store and returns `.notInstalled`.
+`authenticate` detects this and hands the sign-in to the Paspo ID App Clip.
 
 **Why did my flow come back as `.cancelled` without the user doing anything?**
 The callback never arrived — usually the redirect URL is not registered with Paspo, or the Universal Link does not resolve on the device. Check with the custom-scheme fallback first.

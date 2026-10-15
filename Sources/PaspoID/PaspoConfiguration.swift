@@ -21,8 +21,24 @@ public struct PaspoConfiguration: Sendable {
     /// Bundle identifier reported to Paspo ID. Defaults to the main bundle's identifier.
     public var bundleID: String
 
-    /// App Store page opened when Paspo ID is not installed. When `nil`, the SDK returns
-    /// ``PaspoAuthResult/notInstalled`` without navigating anywhere.
+    /// Public identifier of your service, issued in the Paspo admin panel together with ``region``.
+    ///
+    /// Enables the service landing page (``landingURL``), opened when neither Paspo ID nor its
+    /// App Clip can take the sign-in.
+    public var serviceID: String?
+
+    /// Region your service is registered in, issued in the Paspo admin panel.
+    public var region: PaspoRegion
+
+    /// App Clip link the sign-in is handed to when Paspo ID is not installed; the SDK appends the
+    /// request to its query. `nil` skips the App Clip.
+    ///
+    /// Defaults to Apple's App Clip link for Paspo ID. Point it at `https://paspo.id/clip/sso` to
+    /// test with a Local Experience before the App Clip is live on your device.
+    public var appClipURL: URL?
+
+    /// App Store page opened when Paspo ID is not installed and there is no ``landingURL``.
+    /// When both are `nil`, the SDK returns ``PaspoAuthResult/notInstalled`` without navigating anywhere.
     public var appStoreURL: URL?
 
     /// How long to wait for a callback before giving up. Defaults to 10 minutes.
@@ -36,6 +52,9 @@ public struct PaspoConfiguration: Sendable {
         redirectURL: URL,
         fallbackRedirectURL: URL? = nil,
         bundleID: String = Bundle.main.bundleIdentifier ?? "",
+        serviceID: String? = nil,
+        region: PaspoRegion = .kz,
+        appClipURL: URL? = PaspoConfiguration.paspoAppClipURL,
         appStoreURL: URL? = nil,
         callbackTimeout: TimeInterval = 600,
         cancellationGracePeriod: TimeInterval = 0.7
@@ -43,9 +62,27 @@ public struct PaspoConfiguration: Sendable {
         self.redirectURL = redirectURL
         self.fallbackRedirectURL = fallbackRedirectURL
         self.bundleID = bundleID
+        self.serviceID = serviceID
+        self.region = region
+        self.appClipURL = appClipURL
         self.appStoreURL = appStoreURL
         self.callbackTimeout = callbackTimeout
         self.cancellationGracePeriod = cancellationGracePeriod
+    }
+
+    /// Apple's App Clip link for Paspo ID.
+    public static let paspoAppClipURL = URL(string: "https://appclip.apple.com/id?p=paspo.id.Clip")!
+
+    /// `https://{region}.paspo.id/mob/s/{serviceID}?flow=phone`: your service's page in Paspo ID,
+    /// which installs Paspo ID and starts sign-up with a phone number. `nil` without ``serviceID``.
+    public var landingURL: URL? {
+        guard let serviceID, serviceID.isEmpty == false else { return nil }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "\(region.rawValue).paspo.id"
+        components.path = "/mob/s/\(serviceID)"
+        components.queryItems = [URLQueryItem(name: "flow", value: "phone")]
+        return components.url
     }
 
     /// Every URL this application accepts a callback on.

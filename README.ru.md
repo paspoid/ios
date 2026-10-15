@@ -67,6 +67,18 @@ pod 'PaspoIDUI', '~> 1.0'
 
 ## Настройка проекта
 
+**0. Файл конфигурации.** Добавьте сервис в админке Paspo и скачайте `PaspoID-Info.plist`. Перетащите его в таргет приложения (отметьте «Copy items if needed» и принадлежность таргету). В файле всё, что SDK нужно знать о сервисе:
+
+| Ключ | Что это |
+|---|---|
+| `SERVICE_ID` | Публичный идентификатор сервиса |
+| `REGION` | Регион, в котором зарегистрирован сервис: `kz`, `ru`, … |
+| `REDIRECT_URL` | Universal Link, через который Paspo ID вернёт результат |
+| `FALLBACK_REDIRECT_URL` | Необязательная запасная custom-схема |
+| `BUNDLE_ID` | Необязательно; по умолчанию bundle identifier приложения |
+
+С файлом вся настройка SDK — один вызов `Paspo.configure()`. Если файла нет или он битый, debug-сборка остановится и напишет причину.
+
 **1. Redirect URL.** Paspo ID возвращает результат, открывая URL, принадлежащий вашему приложению. Используйте Universal Link на своём домене:
 
 ```xml
@@ -88,12 +100,7 @@ pod 'PaspoIDUI', '~> 1.0'
 @main
 struct YourApp: App {
     init() {
-        Paspo.configure(
-            PaspoConfiguration(
-                redirectURL: URL(string: "https://your.app/paspo/callback")!,
-                fallbackRedirectURL: URL(string: "yourapp://paspo-callback")!
-            )
-        )
+        Paspo.configure() // читает PaspoID-Info.plist
     }
 
     var body: some Scene {
@@ -110,6 +117,21 @@ struct YourApp: App {
 ```
 
 В UIKit вызывайте `Paspo.shared.handle(url:)` из `scene(_:openURLContexts:)`, `scene(_:continue:)` и `scene(_:willConnectTo:options:)`.
+
+Без файла те же значения передаются в коде:
+
+```swift
+Paspo.configure(
+    PaspoConfiguration(
+        redirectURL: URL(string: "https://your.app/paspo/callback")!,
+        fallbackRedirectURL: URL(string: "yourapp://paspo-callback")!,
+        serviceID: "S6eFaRtr",
+        region: .kz
+    )
+)
+```
+
+Чтобы поменять настройку, которой нет в файле, загрузите его и поправьте: `var configuration = try PaspoConfiguration(); configuration.callbackTimeout = 300; Paspo.configure(configuration)`.
 
 ## Быстрый старт: готовая кнопка
 
@@ -176,7 +198,15 @@ if Paspo.shared.isSignInRequest(url: url) { startSignIn() }
 if Paspo.shared.isPaspoInstalled { /* приложение установлено */ }
 ```
 
-Проверка необязательна: `authenticate` делает её сам и при отсутствии Paspo ID открывает страницу App Store из `PaspoConfiguration.appStoreURL`, возвращая `.notInstalled`.
+Проверка необязательна: `authenticate` делает её сам и при отсутствии Paspo ID передаёт вход в App Clip Paspo ID.
+
+Если Paspo ID не установлен:
+
+1. SDK открывает App Clip Paspo ID с тем же запросом. Пользователь входит в нём без установки, App Clip отвечает на ваш redirect URL, и `authenticate` возвращает те же результаты, что и с полным приложением.
+2. Если App Clip открыть не удалось, SDK открывает страницу сервиса в Paspo ID `https://{region}.paspo.id/mob/s/{service_id}?flow=phone` (или `appStoreURL`, если `serviceID` не задан) и возвращает `.notInstalled`.
+3. `nonce` этой попытки сохраняется и после установки Paspo ID уходит со следующим входом как реферал.
+
+Чтобы не открывать App Clip, задайте `appClipURL = nil`.
 
 `cleanup()` сбрасывает текущий сценарий и уничтожает эфемерный ключ. SDK вызывает его сам при завершении и ошибках; вручную — только если вы прерываете вход сами, например когда пользователь уходит с экрана.
 
@@ -219,7 +249,7 @@ sequenceDiagram
 |---|---|---|
 | `.success` | `authCode: String` | Отправить `authCode` на свой сервер |
 | `.cancelled` | — | Пользователь закрыл экран согласия; обычно UI ошибки не нужен |
-| `.notInstalled` | — | Paspo ID не установлен; SDK уже открыл App Store |
+| `.notInstalled` | — | Ни Paspo ID, ни App Clip не смогли провести вход; SDK уже открыл страницу сервиса или App Store |
 | `.failure` | `error`, `message` | Показать ошибку. `message` — для логов, не для пользователя |
 
 ### Ошибки
