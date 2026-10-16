@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'PaspoID'
-  s.version          = '1.1.0'
+  s.version          = '1.2.0'
   s.summary          = 'Sign in with Paspo ID for iOS.'
   s.description      = <<~DESC
     Adds "Sign in with Paspo ID" to an iOS app: one call returns a one-time authorization

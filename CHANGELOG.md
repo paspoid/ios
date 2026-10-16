@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-16
+
 ### Fixed
 - Without Paspo ID, a sign-in no longer hangs for the whole `callbackTimeout` when the App Clip is unavailable: iOS accepts its link and shows nothing. If the clip does not cover the app within `PaspoConfiguration.appClipLaunchTimeout` (3 s by default), or its card closes without launching it, `authenticate` opens the service page and returns `.notInstalled`.
 
