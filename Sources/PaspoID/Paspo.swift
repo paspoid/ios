@@ -68,6 +68,8 @@ public final class Paspo {
 
     private var pending: PendingRequest?
     private var didLeaveApplication = false
+    private var didResignActive = false
+    private var isAwaitingAppClip = false
     private let lifecycleObservers = LifecycleObserverBox()
 
     private struct PendingRequest {
@@ -76,6 +78,7 @@ public final class Paspo {
         let continuation: CheckedContinuation<PaspoAuthResult, Never>
         var timeoutTask: Task<Void, Never>?
         var cancellationTask: Task<Void, Never>?
+        var appClipLaunchTask: Task<Void, Never>?
     }
 
     // MARK: - Init
@@ -119,7 +122,9 @@ public final class Paspo {
 
         guard isPaspoInstalled else {
             if let appClipURL = configuration.appClipURL, Self.canLaunchAppClips {
-                let result = await run(scope: scope, nonce: nonce) { appClipLink(appClipURL, carrying: $0) }
+                let result = await run(scope: scope, nonce: nonce, awaitsAppClip: true) {
+                    appClipLink(appClipURL, carrying: $0)
+                }
                 guard case .failure(.serviceUnavailable, _) = result else { return result }
             }
             referralStore.save(nonce: nonce)
@@ -134,9 +139,17 @@ public final class Paspo {
 
     /// Opens the request built for `nonce` and waits for its callback.
     ///
-    /// - Parameter link: Turns the `paspo://sso` request into the URL to open.
-    /// - Returns: `.failure(.serviceUnavailable)` when the URL could not be opened.
-    private func run(scope: PaspoScope, nonce: String, link: (URL) -> URL?) async -> PaspoAuthResult {
+    /// - Parameters:
+    ///   - awaitsAppClip: The URL launches the App Clip, which may silently fail to appear.
+    ///   - link: Turns the `paspo://sso` request into the URL to open.
+    /// - Returns: `.failure(.serviceUnavailable)` when the URL could not be opened, or when the App Clip
+    ///   did not take over the screen.
+    private func run(
+        scope: PaspoScope,
+        nonce: String,
+        awaitsAppClip: Bool = false,
+        link: (URL) -> URL?
+    ) async -> PaspoAuthResult {
         let privateKey = P256.KeyAgreement.PrivateKey()
         let state = UUID().uuidString
         let request = PaspoAuthRequest(
@@ -156,6 +169,8 @@ public final class Paspo {
         return await withCheckedContinuation { continuation in
             pending = PendingRequest(state: state, privateKey: privateKey, continuation: continuation)
             didLeaveApplication = false
+            didResignActive = false
+            isAwaitingAppClip = awaitsAppClip
 
             Task { [weak self] in
                 guard let self else { return }
@@ -163,6 +178,7 @@ public final class Paspo {
                 if opened {
                     self.referralStore.clear()
                     self.startTimeout()
+                    if awaitsAppClip { self.startAppClipLaunchTimeout() }
                 } else {
                     self.resolvePending(with: .failure(error: .serviceUnavailable, message: "Could not open Paspo ID"))
                 }
@@ -285,8 +301,10 @@ public final class Paspo {
     private func resolvePending(with result: PaspoAuthResult) {
         guard let pending else { return }
         self.pending = nil
+        isAwaitingAppClip = false
         pending.timeoutTask?.cancel()
         pending.cancellationTask?.cancel()
+        pending.appClipLaunchTask?.cancel()
         pending.continuation.resume(returning: result)
     }
 
@@ -300,6 +318,25 @@ public final class Paspo {
         }
     }
 
+    /// iOS accepts the App Clip link even when the clip is not published and then shows nothing,
+    /// leaving the flow to wait out ``PaspoConfiguration/callbackTimeout``.
+    private func startAppClipLaunchTimeout() {
+        let timeout = configuration.appClipLaunchTimeout
+        guard pending != nil, timeout > 0 else { return }
+        pending?.appClipLaunchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            guard Task.isCancelled == false, let self, self.isAwaitingAppClip, self.didResignActive == false else {
+                return
+            }
+            self.failAppClip(reason: "The App Clip did not open")
+        }
+    }
+
+    private func failAppClip(reason: String) {
+        isAwaitingAppClip = false
+        resolvePending(with: .failure(error: .serviceUnavailable, message: reason))
+    }
+
     private func observeLifecycle() {
         #if canImport(UIKit)
         let center = NotificationCenter.default
@@ -309,7 +346,16 @@ public final class Paspo {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                Task { @MainActor [weak self] in self?.didLeaveApplication = true }
+                Task { @MainActor [weak self] in self?.applicationDidEnterBackground() }
+            }
+        )
+        lifecycleObservers.tokens.append(
+            center.addObserver(
+                forName: UIApplication.willResignActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.applicationWillResignActive() }
             }
         )
         lifecycleObservers.tokens.append(
@@ -324,10 +370,26 @@ public final class Paspo {
         #endif
     }
 
+    func applicationWillResignActive() {
+        guard pending != nil else { return }
+        didResignActive = true
+    }
+
+    func applicationDidEnterBackground() {
+        didLeaveApplication = true
+        isAwaitingAppClip = false
+    }
+
     /// The user came back without a callback ever arriving — Paspo ID was dismissed by
     /// swiping away or tapping the status-bar back button. Treat it as a cancellation, but
     /// only after a grace period: the callback URL may still be in flight.
-    private func applicationDidBecomeActive() {
+    func applicationDidBecomeActive() {
+        // The App Clip card covered the app and was closed without the clip launching: it is
+        // unavailable or the user turned it down, either way the landing is the next step.
+        if isAwaitingAppClip, didResignActive, didLeaveApplication == false {
+            failAppClip(reason: "The App Clip card closed without launching")
+            return
+        }
         guard pending != nil, didLeaveApplication else { return }
         didLeaveApplication = false
 

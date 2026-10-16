@@ -338,7 +338,7 @@ sequenceDiagram
 If Paspo ID is not installed:
 
 1. On iOS 17 and later the SDK opens the Paspo ID App Clip through Apple's default App Clip link, with the same request in its query. The user signs in there without installing anything, and the App Clip answers on your redirect URL, so `authenticate` returns the same results as with the full app.
-2. On earlier iOS, or if the App Clip link cannot be opened, the SDK opens your service's page in Paspo ID, `https://paspo.id/mob/s/{service_id}?flow=phone`, or `appStoreURL` when there is no `serviceID`, and returns `.notInstalled`.
+2. On earlier iOS, or if the App Clip does not open (the link fails, the clip does not appear within `appClipLaunchTimeout`, or its card is closed without launching it), the SDK opens your service's page in Paspo ID, `https://paspo.id/mob/s/{service_id}?flow=phone`, or `appStoreURL` when there is no `serviceID`, and returns `.notInstalled`.
 3. The `nonce` of that attempt is stored. After Paspo ID is installed and `authenticate` is called again, it is passed as a referral for install attribution.
 
 Set `appClipURL` to `nil` to skip the App Clip.
@@ -361,6 +361,7 @@ Set `appClipURL` to `nil` to skip the App Clip.
 `PaspoConfiguration.returnURL(serviceID:region:)` builds the return link, `https://{region}.paspo.id/mob/s/{serviceID}?flow=phone`.
 | `callbackTimeout` | Give up waiting after this long | 600 s |
 | `cancellationGracePeriod` | Delay before an absent callback counts as a cancellation | 0.7 s |
+| `appClipLaunchTimeout` | How long the App Clip has to appear before the SDK falls back to the service page | 3 s |
 
 ### PaspoScope
 

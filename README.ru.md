@@ -205,7 +205,7 @@ if Paspo.shared.isPaspoInstalled { /* приложение установлен�
 Если Paspo ID не установлен:
 
 1. На iOS 17 и новее SDK открывает App Clip Paspo ID по стандартной ссылке Apple, передавая в ней тот же запрос. Пользователь входит в App Clip без установки, App Clip отвечает на ваш redirect URL, и `authenticate` возвращает те же результаты, что и с полным приложением.
-2. На более старых iOS или если ссылку App Clip открыть не удалось, SDK открывает страницу сервиса в Paspo ID `https://paspo.id/mob/s/{service_id}?flow=phone` (или `appStoreURL`, если `serviceID` не задан) и возвращает `.notInstalled`.
+2. На более старых iOS или если App Clip не открылся (ссылка не сработала, App Clip не появился за `appClipLaunchTimeout` или его карточку закрыли без запуска), SDK открывает страницу сервиса в Paspo ID `https://paspo.id/mob/s/{service_id}?flow=phone` (или `appStoreURL`, если `serviceID` не задан) и возвращает `.notInstalled`.
 3. `nonce` этой попытки сохраняется и после установки Paspo ID уходит со следующим входом как реферал.
 
 Чтобы не открывать App Clip, задайте `appClipURL = nil`.

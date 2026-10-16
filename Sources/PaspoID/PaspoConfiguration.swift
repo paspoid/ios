@@ -49,6 +49,11 @@ public struct PaspoConfiguration: Sendable {
     /// treated as a cancellation. Defaults to 0.7 s.
     public var cancellationGracePeriod: TimeInterval
 
+    /// How long the App Clip link has to cover the app before the SDK falls back as if the clip
+    /// could not open. iOS accepts the link even when the clip is unavailable and then shows
+    /// nothing. Defaults to 3 s.
+    public var appClipLaunchTimeout: TimeInterval
+
     public init(
         redirectURL: URL,
         fallbackRedirectURL: URL? = nil,
@@ -58,7 +63,8 @@ public struct PaspoConfiguration: Sendable {
         appClipURL: URL? = PaspoConfiguration.paspoAppClipURL,
         appStoreURL: URL? = nil,
         callbackTimeout: TimeInterval = 600,
-        cancellationGracePeriod: TimeInterval = 0.7
+        cancellationGracePeriod: TimeInterval = 0.7,
+        appClipLaunchTimeout: TimeInterval = 3
     ) {
         self.redirectURL = redirectURL
         self.fallbackRedirectURL = fallbackRedirectURL
@@ -69,6 +75,7 @@ public struct PaspoConfiguration: Sendable {
         self.appStoreURL = appStoreURL
         self.callbackTimeout = callbackTimeout
         self.cancellationGracePeriod = cancellationGracePeriod
+        self.appClipLaunchTimeout = appClipLaunchTimeout
     }
 
     /// Apple's App Clip link for Paspo ID.

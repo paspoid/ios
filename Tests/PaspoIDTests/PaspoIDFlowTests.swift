@@ -13,6 +13,7 @@ final class PaspoIDFlowTests: XCTestCase {
         fallbackRedirectURL: URL? = nil,
         serviceID: String? = nil,
         appClipURL: URL? = nil,
+        appClipLaunchTimeout: TimeInterval = 0,
         defaults: UserDefaults
     ) -> (Paspo, FakeURLOpener) {
         let opener = FakeURLOpener(canOpenAnything: isPaspoInstalled)
@@ -24,7 +25,8 @@ final class PaspoIDFlowTests: XCTestCase {
             appClipURL: appClipURL,
             appStoreURL: appStoreURL,
             callbackTimeout: 0,
-            cancellationGracePeriod: 0
+            cancellationGracePeriod: 0,
+            appClipLaunchTimeout: appClipLaunchTimeout
         )
         let sdk = Paspo(
             configuration: configuration,
@@ -136,6 +138,64 @@ final class PaspoIDFlowTests: XCTestCase {
         XCTAssertEqual(opener.openedURLs.map(\.host), ["appclip.apple.com", "paspo.id"])
         XCTAssertEqual(opener.openedURLs.last?.absoluteString, "https://paspo.id/mob/s/S6eFaRtr?flow=phone")
         XCTAssertEqual(PaspoReferralStore(defaults: defaults).load(), "n-2")
+    }
+
+    func testAppClipThatNeverAppearsFallsBackToTheServiceLanding() async throws {
+        let defaults = try makeDefaults()
+        let (sdk, opener) = makeSDK(
+            isPaspoInstalled: false,
+            serviceID: "S6eFaRtr",
+            appClipURL: PaspoConfiguration.paspoAppClipURL,
+            appClipLaunchTimeout: 0.05,
+            defaults: defaults
+        )
+
+        let result = await sdk.authenticate(scope: .phones, nonce: "n-3")
+
+        XCTAssertEqual(result, .notInstalled)
+        XCTAssertEqual(opener.openedURLs.map(\.host), ["appclip.apple.com", "paspo.id"])
+        XCTAssertEqual(PaspoReferralStore(defaults: defaults).load(), "n-3")
+    }
+
+    func testAppClipCardClosedWithoutLaunchFallsBackToTheServiceLanding() async throws {
+        let defaults = try makeDefaults()
+        let (sdk, opener) = makeSDK(
+            isPaspoInstalled: false,
+            serviceID: "S6eFaRtr",
+            appClipURL: PaspoConfiguration.paspoAppClipURL,
+            appClipLaunchTimeout: 60,
+            defaults: defaults
+        )
+
+        let task = Task { await sdk.authenticate(scope: .phones, nonce: "n-4") }
+        _ = try await opener.waitForOpenedURL()
+        sdk.applicationWillResignActive()
+        sdk.applicationDidBecomeActive()
+
+        let result = await task.value
+        XCTAssertEqual(result, .notInstalled)
+        XCTAssertEqual(opener.openedURLs.last?.host, "paspo.id")
+    }
+
+    func testLaunchedAppClipKeepsWaitingForItsCallback() async throws {
+        let defaults = try makeDefaults()
+        let (sdk, opener) = makeSDK(
+            isPaspoInstalled: false,
+            appClipURL: PaspoConfiguration.paspoAppClipURL,
+            appClipLaunchTimeout: 0.05,
+            defaults: defaults
+        )
+
+        let task = Task { await sdk.authenticate(scope: .phones, nonce: "n-5") }
+        _ = try await opener.waitForOpenedURL()
+        sdk.applicationWillResignActive()
+        sdk.applicationDidEnterBackground()
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        sdk.cleanup()
+        let result = await task.value
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(opener.openedURLs.count, 1)
     }
 
     func testStoredReferralIsSentWithTheNextAttempt() async throws {
