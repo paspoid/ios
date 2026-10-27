@@ -323,6 +323,7 @@ public final class Paspo {
     private func startAppClipLaunchTimeout() {
         let timeout = configuration.appClipLaunchTimeout
         guard pending != nil, timeout > 0 else { return }
+        pending?.appClipLaunchTask?.cancel()
         pending?.appClipLaunchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
             guard Task.isCancelled == false, let self, self.isAwaitingAppClip, self.didResignActive == false else {
@@ -384,10 +385,12 @@ public final class Paspo {
     /// swiping away or tapping the status-bar back button. Treat it as a cancellation, but
     /// only after a grace period: the callback URL may still be in flight.
     func applicationDidBecomeActive() {
-        // The App Clip card covered the app and was closed without the clip launching: it is
-        // unavailable or the user turned it down, either way the landing is the next step.
+        // The App Clip card went away. Its dismissal reactivates the app a moment before the clip
+        // takes over, so only an app that stays uncovered has lost the clip: unavailable or turned
+        // down, either way the landing is the next step.
         if isAwaitingAppClip, didResignActive, didLeaveApplication == false {
-            failAppClip(reason: "The App Clip card closed without launching")
+            didResignActive = false
+            startAppClipLaunchTimeout()
             return
         }
         guard pending != nil, didLeaveApplication else { return }

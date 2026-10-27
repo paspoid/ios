@@ -163,7 +163,7 @@ final class PaspoIDFlowTests: XCTestCase {
             isPaspoInstalled: false,
             serviceID: "S6eFaRtr",
             appClipURL: PaspoConfiguration.paspoAppClipURL,
-            appClipLaunchTimeout: 60,
+            appClipLaunchTimeout: 0.05,
             defaults: defaults
         )
 
@@ -175,6 +175,29 @@ final class PaspoIDFlowTests: XCTestCase {
         let result = await task.value
         XCTAssertEqual(result, .notInstalled)
         XCTAssertEqual(opener.openedURLs.last?.host, "paspo.id")
+    }
+
+    func testAppClipLaunchingRightAfterItsCardClosedKeepsWaiting() async throws {
+        let defaults = try makeDefaults()
+        let (sdk, opener) = makeSDK(
+            isPaspoInstalled: false,
+            appClipURL: PaspoConfiguration.paspoAppClipURL,
+            appClipLaunchTimeout: 0.05,
+            defaults: defaults
+        )
+
+        let task = Task { await sdk.authenticate(scope: .phones, nonce: "n-6") }
+        _ = try await opener.waitForOpenedURL()
+        sdk.applicationWillResignActive()
+        sdk.applicationDidBecomeActive()
+        sdk.applicationWillResignActive()
+        sdk.applicationDidEnterBackground()
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        sdk.cleanup()
+        let result = await task.value
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(opener.openedURLs.count, 1)
     }
 
     func testLaunchedAppClipKeepsWaitingForItsCallback() async throws {
