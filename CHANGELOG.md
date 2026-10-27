@@ -4,6 +4,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-27
+
+### Fixed
+- Launching the App Clip no longer opens the service page and drops the clip's answer. Dismissing the App Clip card reactivates the app a moment before the clip takes over, which counted as the card closing without a launch. The fallback now waits out `PaspoConfiguration.appClipLaunchTimeout` once more, and only an app that stays uncovered falls back.
+
 ## [1.2.0] - 2026-10-16
 
 ### Fixed

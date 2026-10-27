@@ -43,7 +43,7 @@ SDK добавляет в ваше iOS-приложение вход через 
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/paspoid/ios", from: "1.2.0"),
+    .package(url: "https://github.com/paspoid/ios", from: "1.2.1"),
 ]
 ```
 

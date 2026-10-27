@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'PaspoIDUI'
-  s.version          = '1.2.0'
+  s.version          = '1.2.1'
   s.summary          = 'Ready-made "Sign in with Paspo ID" button for iOS.'
   s.description      = <<~DESC
     SwiftUI and UIKit sign-in buttons for the Paspo ID SDK: four themes, configurable corner
